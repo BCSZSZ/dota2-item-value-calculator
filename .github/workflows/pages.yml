@@ -1,0 +1,81 @@
+name: Update data and deploy Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-and-data
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pages: read
+    outputs:
+      publish: ${{ steps.publish.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Test snapshot update rules
+        run: python -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Check official patch and update only if changed
+        if: github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/sync_data.py
+      - name: Commit new snapshot or keep the monitor active
+        id: publish
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          publish=false
+          if [ "$EVENT_NAME" = push ]; then publish=true; fi
+          git add site
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: update Dota 2 patch snapshot'
+            git push origin HEAD:main
+            publish=true
+          elif [ $(( $(date +%s) - $(git log -1 --format=%ct) )) -ge 3888000 ]; then
+            # GitHub pauses public schedules after 60 days without repository activity.
+            # A maintenance commit after 45 days changes no data and does not redeploy.
+            git commit --allow-empty -m 'chore: keep patch monitor active'
+            git push origin HEAD:main
+          fi
+          echo "enabled=$publish" >> "$GITHUB_OUTPUT"
+      - uses: actions/configure-pages@v5
+        if: steps.publish.outputs.enabled == 'true'
+      - uses: actions/upload-pages-artifact@v4
+        if: steps.publish.outputs.enabled == 'true'
+        with:
+          path: site
+
+  deploy:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

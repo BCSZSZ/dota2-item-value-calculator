@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dota 2 装备价值计算器</title>
+<link rel="icon" type="image/png" href="assets/items/blink.png" />
+<style>
+  :root {
+    --bg: #0b0e11;
+    --panel: #11161a;
+    --panel2: #171d21;
+    --panel3: #1c2429;
+    --line: #2b363d;
+    --text: #d7e0e4;
+    --muted: #829098;
+    --gold: #e7bf63;
+    --gold2: #ffdc82;
+    --green: #78b067;
+    --red: #b95f55;
+    --blue: #6a9fb6;
+    --shadow: 0 14px 45px rgba(0,0,0,.38);
+  }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    font-family: Inter, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(circle at 20% -10%, rgba(79,113,126,.18), transparent 34%),
+      radial-gradient(circle at 90% 0%, rgba(139,71,50,.14), transparent 30%),
+      linear-gradient(180deg,#080b0d,#0b0f12 52%,#080a0c);
+    overflow: hidden;
+  }
+  button, input { font: inherit; }
+  button { color: inherit; }
+  .app { height: 100vh; display: grid; grid-template-rows: 54px minmax(0,1fr); }
+  .topbar {
+    display: flex; align-items: center; gap: 14px; padding: 9px 16px;
+    background: linear-gradient(180deg,rgba(28,35,40,.98),rgba(14,19,22,.98));
+    border-bottom: 1px solid #344047; box-shadow: 0 4px 22px rgba(0,0,0,.35); z-index: 5;
+  }
+  .brand { min-width: 245px; }
+  .brand h1 { margin: 0; font-size: 16px; letter-spacing: .04em; font-weight: 750; }
+  .brand small { color: var(--muted); font-size: 11px; }
+  .search-wrap { flex: 1; position: relative; max-width: 760px; }
+  .search-wrap input {
+    width: 100%; height: 42px; padding: 0 48px 0 16px; color: #eef4f6;
+    background: #080c0f; border: 1px solid #303a40; outline: none;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,.55);
+  }
+  .search-wrap input:focus { border-color: #627985; }
+  .search-wrap .kbd { position:absolute; right:11px; top:10px; color:#708088; border:1px solid #39464d; padding:2px 6px; font-size:11px; }
+  .top-actions { display: flex; align-items:center; gap:8px; margin-left:auto; }
+  .top-btn {
+    height: 38px; padding: 0 12px; border: 1px solid #354149; background: #151b1f; cursor: pointer;
+  }
+  .top-btn:hover { background:#20282d; }
+  .sound-indicator { width:9px;height:9px;border-radius:50%;background:#8a7445;display:inline-block;margin-right:6px;box-shadow:0 0 9px rgba(231,191,99,.25); }
+  .layout { min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 310px; }
+  .shop { min-height:0; display:grid; grid-template-rows:auto auto minmax(0,1fr); border-right:1px solid #303a40; }
+  .statusbar { display:flex; align-items:center; gap:9px; padding:5px 12px; border-bottom:1px solid #252f35; background:rgba(13,18,21,.9); color:var(--muted); font-size:12px; }
+  .status-dot { width:8px;height:8px;border-radius:50%;background:#9b854b; }
+  .status-dot.ok { background:#68a763; box-shadow:0 0 10px rgba(104,167,99,.45); }
+  .status-dot.bad { background:#a96358; }
+  .statusbar .spacer { flex:1; }
+  .tabs { display:flex; gap:1px; background:#0c1013; border-bottom:1px solid #29343a; padding:4px 12px 0; overflow-x:auto; }
+  .tab { border:0;border-top:2px solid transparent; padding:7px 13px 8px; background:#12171a; color:#89969d; cursor:pointer; white-space:nowrap; }
+  .tab:hover { color:#c6d0d4;background:#182025; }
+  .tab.active { color:#f1f4f5; background:#1c2429; border-top-color:#7d958e; }
+  .items-area { min-height:0; overflow:auto; padding:9px 12px 12px; background:linear-gradient(135deg,rgba(13,17,20,.88),rgba(8,11,13,.96)); }
+  .hint { margin:0 0 8px; color:#7f8b91; font-size:12px; }
+  .item-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; align-content:start; }
+  .shop-section { min-width:0; }
+  .shop-section-head { display:flex;align-items:center;gap:7px;margin:0 0 5px;color:#94a2a8;font-size:11px;text-transform:uppercase;letter-spacing:.1em; }
+  .shop-section-head::after { content:"";height:1px;background:#263238;flex:1; }
+  .section-grid { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;max-width:260px;align-items:start; }
+  .item {
+    position:relative; min-width:0; background:linear-gradient(180deg,#20282d,#12181c); border:1px solid #2c383f;
+    cursor:pointer; user-select:none; transition:transform .07s ease,border-color .07s ease,filter .07s ease;
+    box-shadow:0 5px 13px rgba(0,0,0,.24);
+  }
+  .item:hover { transform:translateY(-1px); border-color:#61737b; filter:brightness(1.08); }
+  .item.bought { box-shadow:0 0 0 1px rgba(215,181,96,.5),0 7px 18px rgba(0,0,0,.35); }
+  .item .imgbox { aspect-ratio: 85/64; background:#080b0d; overflow:hidden; }
+  .item img { width:100%;height:100%;object-fit:cover;display:block; }
+  .item .meta { position:absolute; right:0; bottom:0; padding:1px 3px; background:rgba(3,6,8,.88); pointer-events:none; }
+  .item .name { display:none; }
+  .item .price { color:var(--gold2); font-size:10px; line-height:12px; font-weight:700; }
+  .item .coin { display:none; }
+  .coin { display:inline-block;width:7px;height:7px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff1a7,#c58d24 66%,#6c4912);margin-right:5px;vertical-align:1px; }
+  .qty-badge { position:absolute;right:1px;top:1px;min-width:16px;height:15px;padding:0 3px;display:flex;align-items:center;justify-content:center;background:rgba(15,20,22,.9);border:1px solid #caa84f;color:#ffe49d;font-size:11px;font-weight:800; }
+  .recipe-label { position:absolute;left:3px;top:3px;background:rgba(79,92,99,.88);font-size:9px;padding:2px 4px;color:#dae0e2; }
+  .empty-state { padding:50px 20px;text-align:center;color:#77858c; }
+
+  .side { min-height:0; display:grid; grid-template-rows:auto auto minmax(0,1fr); background:#0d1215; }
+  .total-box { padding:12px 14px; background:linear-gradient(180deg,#1b2328,#101518); border-bottom:1px solid #303b41; }
+  .total-caption { color:#89969d;font-size:12px;text-transform:uppercase;letter-spacing:.12em; }
+  .total { margin-top:4px;display:flex;align-items:baseline;gap:9px; }
+  .total strong { font-size:32px;line-height:1;color:var(--gold2);font-weight:800;text-shadow:0 1px 7px rgba(230,189,87,.18); }
+  .total span { color:#9ca7ac;font-size:13px; }
+  .summary { margin-top:10px;display:flex;gap:12px;color:#74838b;font-size:12px; }
+  .toolbar { display:flex;gap:7px;margin-top:13px; }
+  .danger { border:1px solid #493833;background:#1b1716;color:#ba8c83; }
+  .danger:hover { background:#2b1e1b; }
+  .slots-wrap { padding:10px 14px;border-bottom:1px solid #28333a;background:#11171a; }
+  .slot-title { display:flex;justify-content:space-between;color:#8c999f;font-size:11px;margin-bottom:8px; }
+  .slots { display:grid;grid-template-columns:repeat(3,1fr);gap:6px; }
+  .slot { position:relative;aspect-ratio:85/54;background:linear-gradient(135deg,#070a0c,#11181c);border:1px solid #2d393f;box-shadow:inset 0 0 15px rgba(0,0,0,.58);overflow:hidden; }
+  .slot.backpack { opacity:.72; }
+  .slot img { width:100%;height:100%;object-fit:cover;display:block; }
+  .slot .slot-price { position:absolute;right:3px;bottom:2px;background:rgba(0,0,0,.7);padding:1px 4px;font-size:10px;color:#f0ca6a; }
+  .slot .remove { position:absolute;right:2px;top:2px;width:19px;height:19px;border:0;background:rgba(8,10,11,.8);color:#c7d0d4;cursor:pointer;display:none; }
+  .slot:hover .remove { display:block; }
+  .stash-note { margin-top:7px;color:#5f6c72;font-size:10px; }
+  .side-scroll { min-height:0;overflow:auto;display:grid;grid-template-rows:auto auto;align-content:start; }
+  .detail { padding:12px 14px;border-bottom:1px solid #263139; }
+  .detail-empty { color:#69777d;font-size:12px;padding:18px 0; }
+  .detail-head { display:flex;gap:12px; }
+  .detail-head img { width:72px;height:54px;object-fit:cover;background:#080a0c;border:1px solid #39464c; }
+  .detail h2 { margin:1px 0 4px;font-size:15px; }
+  .detail-price { color:var(--gold2);font-weight:700; }
+  .detail-tags { margin-top:6px;color:#728087;font-size:11px; }
+  .detail-actions { margin-top:12px;display:flex;gap:7px; }
+  .buy-btn { flex:1;border:1px solid #58725f;background:linear-gradient(#35483a,#26362c);padding:9px;cursor:pointer;font-weight:700;color:#dfeadf; }
+  .buy-btn:hover { filter:brightness(1.12); }
+  .cart { padding:12px 14px 20px; }
+  .cart-title { display:flex;justify-content:space-between;align-items:center;margin-bottom:9px; }
+  .cart-title span:first-child { color:#aab5ba;font-size:12px;text-transform:uppercase;letter-spacing:.08em; }
+  .cart-list { display:flex;flex-direction:column;gap:5px; }
+  .cart-row { display:grid;grid-template-columns:46px minmax(0,1fr) auto auto;gap:8px;align-items:center;background:#12181c;border:1px solid #263139;padding:5px; }
+  .cart-row img { width:46px;height:34px;object-fit:cover; }
+  .cart-row .cart-name { min-width:0; }
+  .cart-row .cart-name b { display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;font-weight:600; }
+  .cart-row .cart-name small { color:#6f7d83;font-size:10px; }
+  .qty-ctl { display:flex;align-items:center;gap:4px; }
+  .mini { width:24px;height:24px;border:1px solid #38454b;background:#171e22;cursor:pointer;color:#aebabe; }
+  .mini:hover { background:#242d32; }
+  .row-total { color:#d5b45e;font-size:11px;min-width:62px;text-align:right; }
+  .footer-note { margin-top:14px;color:#5e6b71;font-size:10px;line-height:1.45; }
+  .toast { position:fixed;left:50%;top:64px;transform:translate(-50%,-8px);background:rgba(15,20,23,.96);border:1px solid #4b5a61;color:#dce3e6;padding:9px 14px;opacity:0;pointer-events:none;transition:.16s;z-index:20;box-shadow:var(--shadow);font-size:12px; }
+  .toast.show { opacity:1;transform:translate(-50%,0); }
+  .flash { animation: flash .18s ease; }
+  @keyframes flash { from{filter:brightness(1.65)} to{filter:brightness(1)} }
+  input[type=file] { display:none; }
+  @media(max-width:900px){
+    body{overflow:auto}.app{height:auto;min-height:100vh}.layout{grid-template-columns:1fr}.shop{height:auto;border-right:0}.items-area{overflow:visible}.item-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.side{min-height:600px}.brand{min-width:auto}.brand small{display:none}.topbar{flex-wrap:wrap;height:auto}.app{grid-template-rows:auto auto}.search-wrap{order:3;flex-basis:100%;max-width:none}.top-actions{margin-left:auto}
+  }
+  @media(max-height:740px) and (min-width:901px){
+    .section-grid{max-width:235px}.item-grid{gap:9px 12px}
+  }
+  @media(max-width:600px){
+    .item-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.brand h1{font-size:14px}
+    .topbar{gap:8px;padding:8px}.top-btn{padding:0 8px;font-size:12px}
+    .statusbar{flex-wrap:wrap;font-size:11px}.tabs{padding-left:4px}.tab{padding:7px 10px;font-size:12px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>DOTA 2 · 装备价值计算器</h1>
+      <small>右键购买 · 左键查看 · 自动计算总价值</small>
+    </div>
+    <div class="search-wrap">
+      <input id="search" autocomplete="off" placeholder="搜索装备：BKB / Butterfly / 蝴蝶 / 大炮 / 跳刀…" />
+      <span class="kbd">/</span>
+    </div>
+    <div class="top-actions">
+      <button class="top-btn" id="soundBtn" title="切换购买音效"><span id="soundDot" class="sound-indicator"></span><span id="soundText">音效准备中</span></button>
+      <label class="top-btn" for="soundFile" style="display:flex;align-items:center;cursor:pointer">载入本地音效</label>
+      <input id="soundFile" type="file" accept="audio/*" />
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="shop">
+      <div class="statusbar">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="statusText">正在载入本站装备快照…</span>
+        <span class="spacer"></span>
+        <span id="patchText">Patch —</span>
+        <button class="top-btn" id="refreshBtn" style="height:28px;padding:0 9px" title="重新载入已发布快照；后台每小时检查新版本">重新载入</button>
+      </div>
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="all">全部商店</button>
+        <button class="tab" data-tab="consumable">消耗品</button>
+        <button class="tab" data-tab="basic">基础商店</button>
+        <button class="tab" data-tab="upgrade">升级商店</button>
+        <button class="tab" data-tab="secret">神秘商店</button>
+      </nav>
+      <div class="items-area">
+        <p class="hint">右键购买 · 左键查看详情 · 悬停显示名称与售价</p>
+        <div class="item-grid" id="itemGrid"><div class="empty-state">加载中…</div></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="total-box">
+        <div class="total-caption">TOTAL NET WORTH</div>
+        <div class="total"><strong id="totalGold">0</strong><span>GOLD</span></div>
+        <div class="summary"><span id="itemCount">0 件装备</span><span id="uniqueCount">0 种</span><span id="avgCost">均价 0</span></div>
+        <div class="toolbar">
+          <button class="top-btn" id="copyBtn">复制 Build</button>
+          <button class="top-btn" id="undoBtn">撤销</button>
+          <button class="top-btn danger" id="clearBtn">清空</button>
+        </div>
+      </section>
+
+      <section class="slots-wrap">
+        <div class="slot-title"><span>英雄物品栏</span><span>前 6 格 + 背包 3 格</span></div>
+        <div class="slots" id="slots"></div>
+        <div class="stash-note" id="stashNote">超过 9 件的装备仍会计入总价值，并显示在下方购买清单。</div>
+      </section>
+
+      <div class="side-scroll">
+        <section class="detail" id="detail"><div class="detail-empty">左键点击装备查看详情。</div></section>
+        <section class="cart">
+          <div class="cart-title"><span>购买清单</span><span id="cartKinds" style="color:#69777d;font-size:11px">0 项</span></div>
+          <div class="cart-list" id="cartList"><div class="detail-empty">尚未购买装备。</div></div>
+          <div class="footer-note">
+            数据按 Dota 2 官方版本生成快照。商店清单：dotabuff/d2vpkr；价格：OpenDota。<br>
+            装备图标与 Ui_buy 购买音效随网站提供。Dota 2 素材归 Valve 所有。
+          </div>
+        </section>
+      </div>
+    </aside>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+  const aliases = {
+    blink:'跳刀 blink dagger', black_king_bar:'bkb 黑皇杖 黑皇', butterfly:'蝴蝶', satanic:'撒旦', greater_crit:'大炮 代达罗斯 daedalus',
+    sheepstick:'羊刀 邪恶镰刀 scythe', skadi:'冰眼 斯嘉蒂', assault:'强袭 assault cuirass', heart:'龙心 恐鳌之心', monkey_king_bar:'金箍棒 mkb',
+    rapier:'圣剑 divine rapier', radiance:'辉耀', travel_boots:'飞鞋', travel_boots_2:'飞鞋2', power_treads:'假腿', phase_boots:'相位鞋',
+    hand_of_midas:'点金 点金手', aghanims_scepter:'a杖 蓝杖 阿哈利姆神杖', moon_shard:'月之碎片', refresher:'刷新球', octarine_core:'玲珑心',
+    sphere:'林肯 林肯法球', orchid:'紫苑', bloodthorn:'血棘', nullifier:'否决坠饰 否决', desolator:'黯灭 暗灭', manta:'分身斧',
+    diffusal_blade:'散失之刃 散失', disperser:'分散者', battlefury:'狂战斧', basher:'碎颅锤 晕锤', abyssal_blade:'深渊之刃 大晕锤',
+    bfury:'狂战斧', cyclone:'风杖 eul', wind_waker:'风之杖', force_staff:'推推 推推棒', hurricane_pike:'飓风长戟 大推推', glimmer_cape:'微光披风',
+    invis_sword:'隐刀 影刃', silver_edge:'大隐刀 银月之晶? silver edge', lotus_orb:'莲花 莲花球', crimson_guard:'赤红甲', pipe:'笛子 洞察烟斗',
+    mekansm:'梅肯', guardian_greaves:'大鞋 卫士胫甲', vladmir:'祭品 弗拉迪米尔', bloodstone:'血精石', shivas_guard:'冰甲 希瓦',
+    armlet:'臂章', maelstrom:'电锤 漩涡', mjollnir:'大电锤 雷神之锤', gleipnir:'缚灵索', echo_sabre:'回音战刃 双刀', harpoon:'鱼叉',
+    mage_slayer:'法师克星', eternal_shroud:'永世法衣', kaya:'慧光', sange:'散华', yasha:'夜叉', kaya_and_sange:'慧夜? 慧光散华',
+    sange_and_yasha:'双刀 散夜对剑', yasha_and_kaya:'慧夜对剑', boots:'鞋 速度之靴', bottle:'瓶子 魔瓶', tpscroll:'tp 回城 回城卷轴',
+    ward_observer:'假眼 侦查守卫', ward_sentry:'真眼 岗哨守卫', dust:'粉 显影之尘', smoke_of_deceit:'雾 诡计之雾', tango:'吃树', flask:'大药 治疗药膏',
+    clarity:'小净化 净化药水', enchanted_mango:'芒果', faerie_fire:'仙灵火', blood_grenade:'血榴弹'
+  };
+
+  const SHOP_GROUPS = [
+    {id:'consumables',label:'消耗品',tab:'consumable'},
+    {id:'attributes',label:'属性',tab:'basic'},
+    {id:'weapons_armor',label:'武器与护甲',tab:'basic'},
+    {id:'misc',label:'杂项',tab:'basic'},
+    {id:'basics',label:'基础合成',tab:'upgrade'},
+    {id:'support',label:'辅助',tab:'upgrade'},
+    {id:'magics',label:'法术',tab:'upgrade'},
+    {id:'defense',label:'防御',tab:'upgrade'},
+    {id:'weapons',label:'武器',tab:'upgrade'},
+    {id:'artifacts',label:'神器',tab:'upgrade'},
+    {id:'secretshop',label:'神秘商店',tab:'secret'}
+  ];
+  const GROUP_LABEL = Object.fromEntries(SHOP_GROUPS.map(x=>[x.id,x.label]));
+
+  let items = {};
+  let itemList = [];
+  let shopGroups = new Map();
+  let tab = 'all';
+  let selected = null;
+  let cart = new Map();
+  let history = [];
+  let audioMode = 'synth'; // original | custom | synth | muted
+  let customAudio = null;
+  let originalAudio = null;
+  let originalSoundReady = false;
+  let audioCtx = null;
+
+  const $ = s => document.querySelector(s);
+  const grid = $('#itemGrid');
+  const search = $('#search');
+  const fmt = n => Number(n||0).toLocaleString('en-US');
+
+  function imgUrl(item){ return item?.img || ''; }
+
+  async function loadData(){
+    $('#refreshBtn').disabled=true;
+    setStatus('loading','正在载入本站装备快照…');
+    try {
+      const response=await fetch('data/items.json');
+      if(!response.ok) throw new Error('HTTP '+response.status);
+      const data=await response.json();
+      if(!data.items || !data.groups || !data.patch) throw new Error('快照格式无效');
+      items=data.items; shopGroups=new Map(Object.entries(data.groups));
+      const seen=new Set(); itemList=[];
+      for(const group of SHOP_GROUPS){
+        for(const key of (shopGroups.get(group.id)||[])){
+          if(seen.has(key))continue;
+          seen.add(key); itemList.push({key,...items[key],group:group.id,tab:group.tab});
+        }
+      }
+      cart=new Map([...cart].filter(([key])=>items[key])); history=[];
+      setStatus('ok',`${itemList.length} 件商店装备 · 版本快照 · 自动更新`);
+      $('#statusText').title='快照生成于 '+new Date(data.generatedAt).toLocaleString()+'；后台每小时检查官方版本';
+      $('#patchText').textContent='Patch '+data.patch;
+      renderAllCart();
+      const key=selected && seen.has(selected.key) ? selected.key : 'black_king_bar';
+      if(itemList.length)selectItem(seen.has(key)?key:itemList[0].key);
+    } catch(error){
+      setStatus('bad',items && itemList.length?'快照载入失败，继续使用已载入的数据':'数据载入失败，请点击重新载入');
+      if(!itemList.length)grid.innerHTML='<div class="empty-state">装备快照暂时无法载入。</div>';
+      console.error(error);
+    } finally { $('#refreshBtn').disabled=false; }
+  }
+  function setStatus(type,text){
+    $('#statusDot').className='status-dot '+(type==='ok'?'ok':type==='bad'?'bad':'');
+    $('#statusText').textContent=text;
+  }
+
+  function matches(item,q){
+    if(!q) return true;
+    q=q.toLowerCase().trim();
+    const hay=[item.dname,item.key,(aliases[item.key]||'')].join(' ').toLowerCase();
+    return q.split(/\s+/).every(x=>hay.includes(x));
+  }
+  function renderItems(){
+    const q=search.value;
+    let filtered=itemList.filter(it=>matches(it,q));
+    if(tab==='consumable') filtered=filtered.filter(it=>it.group==='consumables');
+    else if(tab!=='all') filtered=filtered.filter(it=>it.tab===tab);
+    if(!filtered.length){ grid.innerHTML='<div class="empty-state">没有找到匹配装备。</div>'; return; }
+    const byGroup=new Map(); for(const it of filtered){ if(!byGroup.has(it.group))byGroup.set(it.group,[]); byGroup.get(it.group).push(it); }
+    const groups=shopGroups.size?SHOP_GROUPS:SHOP_GROUPS.filter(g=>byGroup.has(g.id));
+    const card=it=>{ const qty=cart.get(it.key)||0; return `<article class="item ${qty?'bought':''}" data-key="${esc(it.key)}" title="${esc(it.dname)} · ${fmt(it.cost)} gold\n右键购买 / 左键查看">
+        ${qty?`<span class="qty-badge">×${qty}</span>`:''}
+        <div class="imgbox"><img loading="lazy" src="${esc(imgUrl(it))}" alt="${esc(it.dname)}"></div>
+        <div class="meta"><div class="name">${esc(it.dname)}</div><div class="price"><span class="coin"></span>${fmt(it.cost)}</div></div>
+      </article>`; };
+    grid.innerHTML=groups.map(g=>{
+      const arr=byGroup.get(g.id)||[]; if(!arr.length)return '';
+      return `<section class="shop-section"><div class="shop-section-head">${esc(g.label)} <span>${arr.length}</span></div><div class="section-grid">${arr.map(card).join('')}</div></section>`;
+    }).join('');
+  }
+  function esc(s){ return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+
+  function selectItem(key){
+    const it=items[key]; if(!it)return;
+    const listed=itemList.find(x=>x.key===key); selected={key,...it,group:listed?.group||'misc'};
+    const comps=(it.components||[]).map(k=>items[k]?.dname||k).join(' + ');
+    $('#detail').innerHTML=`<div class="detail-head">
+      <img src="${esc(imgUrl(it))}" alt="${esc(it.dname)}">
+      <div><h2>${esc(it.dname)}</h2><div class="detail-price"><span class="coin"></span>${fmt(it.cost)} gold</div><div class="detail-tags">${esc((it.qual||'item').toUpperCase())} · ${esc(GROUP_LABEL[selected.group]||selected.group||'ITEM')}</div></div>
+    </div>
+    ${comps?`<div style="margin-top:10px;color:#87949a;font-size:11px;line-height:1.5">组件：${esc(comps)}</div>`:''}
+    <div class="detail-actions"><button class="buy-btn" id="detailBuy">右键式购买 +1</button></div>`;
+    $('#detailBuy').addEventListener('click',()=>buy(key));
+  }
+
+  function snapshot(){ history.push(new Map(cart)); if(history.length>50)history.shift(); }
+  function buy(key){
+    const it=items[key]; if(!it)return;
+    snapshot(); cart.set(key,(cart.get(key)||0)+1); playBuySound();
+    renderAllCart();
+    toast(`${it.dname}  +1  ·  ${fmt(it.cost)} gold`);
+  }
+  function changeQty(key,delta){
+    if(!cart.has(key) && delta<0)return;
+    snapshot(); const n=Math.max(0,(cart.get(key)||0)+delta); if(n)cart.set(key,n); else cart.delete(key);
+    if(delta>0)playBuySound(); renderAllCart();
+  }
+  function clearCart(){ if(!cart.size)return; snapshot(); cart.clear(); renderAllCart(); toast('已清空'); }
+  function undo(){ if(!history.length){toast('没有可撤销操作');return;} cart=history.pop(); renderAllCart(); toast('已撤销'); }
+
+  function flattenedCart(){
+    const arr=[]; for(const [key,n] of cart){ for(let i=0;i<n;i++) arr.push({key,...items[key]}); } return arr;
+  }
+  function renderSlots(){
+    const flat=flattenedCart(); let html='';
+    for(let i=0;i<9;i++){
+      const it=flat[i]; const cls=i>=6?'slot backpack':'slot';
+      if(it) html+=`<div class="${cls}" title="${esc(it.dname)}"><img src="${esc(imgUrl(it))}"><span class="slot-price">${fmt(it.cost)}</span><button class="remove" data-remove="${esc(it.key)}" title="移除一个">×</button></div>`;
+      else html+=`<div class="${cls}"></div>`;
+    }
+    $('#slots').innerHTML=html;
+    const over=Math.max(0,flat.length-9); $('#stashNote').textContent=over?`另有 ${over} 件超过物品栏容量，但仍计入总价值。`:'超过 9 件的装备仍会计入总价值，并显示在下方购买清单。';
+  }
+  function renderCart(){
+    if(!cart.size){ $('#cartList').innerHTML='<div class="detail-empty">尚未购买装备。</div>'; $('#cartKinds').textContent='0 项'; return; }
+    const rows=[...cart.entries()].map(([key,n])=>({key,n,it:items[key]})).filter(x=>x.it).sort((a,b)=>(b.it.cost*b.n)-(a.it.cost*a.n));
+    $('#cartKinds').textContent=rows.length+' 项';
+    $('#cartList').innerHTML=rows.map(({key,n,it})=>`<div class="cart-row">
+      <img src="${esc(imgUrl(it))}" alt=""><div class="cart-name"><b>${esc(it.dname)}</b><small>${fmt(it.cost)} × ${n}</small></div>
+      <div class="qty-ctl"><button class="mini" data-minus="${esc(key)}">−</button><span style="min-width:18px;text-align:center;font-size:11px">${n}</span><button class="mini" data-plus="${esc(key)}">+</button></div>
+      <div class="row-total">${fmt(it.cost*n)}</div>
+    </div>`).join('');
+  }
+  function renderTotals(){
+    let total=0,count=0; for(const [key,n] of cart){ const c=Number(items[key]?.cost||0); total+=c*n; count+=n; }
+    $('#totalGold').textContent=fmt(total); $('#itemCount').textContent=count+' 件装备'; $('#uniqueCount').textContent=cart.size+' 种'; $('#avgCost').textContent='均价 '+fmt(count?Math.round(total/count):0);
+  }
+  function renderAllCart(){ renderTotals(); renderSlots(); renderCart(); renderItems(); }
+
+  async function copyBuild(){
+    if(!cart.size){toast('购买清单为空');return;}
+    let total=0; const lines=[...cart].map(([key,n])=>{ const it=items[key]; const sub=it.cost*n; total+=sub; return `${it.dname}${n>1?' ×'+n:''} — ${fmt(sub)}`; });
+    const text=`Dota 2 Build\n${lines.join('\n')}\nTotal: ${fmt(total)} gold`;
+    try { await navigator.clipboard.writeText(text); toast('Build 已复制'); }
+    catch(e){ const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Build 已复制'); }
+  }
+
+  function toast(msg){ const el=$('#toast');el.textContent=msg;el.classList.remove('show');void el.offsetWidth;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),1200); }
+
+  function synthBuy(){
+    try{
+      audioCtx ||= new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended')audioCtx.resume();
+      const now=audioCtx.currentTime;
+      // metallic click
+      const click=audioCtx.createOscillator(), cg=audioCtx.createGain(); click.type='square'; click.frequency.setValueAtTime(1550,now); click.frequency.exponentialRampToValueAtTime(900,now+.045); cg.gain.setValueAtTime(.09,now); cg.gain.exponentialRampToValueAtTime(.001,now+.055); click.connect(cg).connect(audioCtx.destination);click.start(now);click.stop(now+.06);
+      // bright coin-like two-tone chime
+      [[880,0,.14,.09],[1320,.035,.12,.065],[1760,.07,.10,.04]].forEach(([f,d,dur,g])=>{ const o=audioCtx.createOscillator(),v=audioCtx.createGain();o.type='triangle';o.frequency.setValueAtTime(f,now+d);o.frequency.exponentialRampToValueAtTime(f*1.07,now+d+dur);v.gain.setValueAtTime(.001,now+d);v.gain.exponentialRampToValueAtTime(g,now+d+.008);v.gain.exponentialRampToValueAtTime(.001,now+d+dur);o.connect(v).connect(audioCtx.destination);o.start(now+d);o.stop(now+d+dur+.01); });
+    }catch(e){}
+  }
+  function playBuySound(){
+    if(audioMode==='muted')return;
+    const a = audioMode==='custom' ? customAudio : audioMode==='original' ? originalAudio : null;
+    if(a){ try{a.currentTime=0; const p=a.play(); if(p?.catch)p.catch(()=>synthBuy()); return;}catch(e){} }
+    synthBuy();
+  }
+  function setSoundMode(mode){
+    audioMode=mode;
+    const labels={original:'Dota Ui_buy',custom:'本地音效',synth:'清脆购买音',muted:'静音'};
+    $('#soundText').textContent=labels[mode]||mode;
+    $('#soundDot').style.background=mode==='muted'?'#665d5a':mode==='original'?'#77ad69':mode==='custom'?'#6a9fb6':'#b59a57';
+  }
+
+  function tryLoadOriginalSound(){
+    originalAudio=new Audio('assets/audio/ui_buy.mp3');
+    originalAudio.preload='auto'; originalAudio.volume=.72;
+    originalAudio.addEventListener('canplaythrough',()=>{
+      originalSoundReady=true;
+      if(audioMode==='synth')setSoundMode('original');
+    },{once:true});
+    originalAudio.addEventListener('error',()=>{
+      originalSoundReady=false;
+      if(audioMode==='original')setSoundMode('synth');
+    });
+    setSoundMode('synth'); originalAudio.load();
+  }
+
+  grid.addEventListener('click',e=>{ const card=e.target.closest('.item');if(card)selectItem(card.dataset.key); });
+  grid.addEventListener('contextmenu',e=>{ const card=e.target.closest('.item');if(!card)return;e.preventDefault();buy(card.dataset.key); card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash'); });
+  $('#tabs').addEventListener('click',e=>{ const b=e.target.closest('.tab');if(!b)return;tab=b.dataset.tab;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));renderItems(); });
+  search.addEventListener('input',renderItems);
+  document.addEventListener('keydown',e=>{ if(e.key==='/' && document.activeElement!==search){e.preventDefault();search.focus();} if(e.key==='Escape'){search.value='';search.blur();renderItems();} });
+  $('#cartList').addEventListener('click',e=>{ const p=e.target.dataset.plus,m=e.target.dataset.minus;if(p)changeQty(p,1);if(m)changeQty(m,-1); });
+  $('#slots').addEventListener('click',e=>{ const k=e.target.dataset.remove;if(k)changeQty(k,-1); });
+  $('#clearBtn').addEventListener('click',clearCart); $('#undoBtn').addEventListener('click',undo); $('#copyBtn').addEventListener('click',copyBuild); $('#refreshBtn').addEventListener('click',loadData);
+  $('#soundBtn').addEventListener('click',()=>{ const seq=originalSoundReady?['original','synth','muted']:['synth','muted']; const i=seq.indexOf(audioMode); setSoundMode(seq[(i+1)%seq.length]); if(audioMode!=='muted')playBuySound(); });
+  $('#soundFile').addEventListener('change',e=>{ const f=e.target.files?.[0];if(!f)return; if(customAudio?.src?.startsWith('blob:'))URL.revokeObjectURL(customAudio.src); customAudio=new Audio(URL.createObjectURL(f));customAudio.volume=.78;setSoundMode('custom');toast('已载入 '+f.name);playBuySound(); });
+
+  for(let i=0;i<9;i++) $('#slots').insertAdjacentHTML('beforeend',`<div class="slot ${i>=6?'backpack':''}"></div>`);
+  loadData();
+  tryLoadOriginalSound();
+})();
+</script>
+</body>
+</html>
